@@ -22,7 +22,14 @@ func startTestProxyServer() *httptest.Server {
 	if err != nil {
 		panic(err)
 	}
-	rateLimiter := NewRateLimiter(2) // Set LRU cache size to 2
+	config := Config{
+		Target:     "http://localhost:8080",
+		ProxyPort:  8081,
+		RateLimit:  1,
+		BurstLimit: 1,
+		CacheSize:  2,
+	}
+	rateLimiter := NewRateLimiter(config)
 	proxy := httputil.NewSingleHostReverseProxy(targetURL)
 
 	// Wrap the proxy with middlewares

@@ -15,22 +15,27 @@ import (
 )
 
 type Config struct {
-	Target    string `yaml:"target"`
-	ProxyPort int    `yaml:"proxy_port"`
+	Target     string `yaml:"target"`
+	ProxyPort  int    `yaml:"proxy_port"`
+	RateLimit  int    `yaml:"rate_limit"`
+	BurstLimit int    `yaml:"burst_limit"`
+	CacheSize  int    `yaml:"cache_size"`
 }
 
 type RateLimiter struct {
 	limitersCache *lru.Cache
 	mu            sync.Mutex
+	config        Config
 }
 
-func NewRateLimiter(cacheSize int) *RateLimiter {
-	limitersLRU, err := lru.New(cacheSize)
+func NewRateLimiter(config Config) *RateLimiter {
+	limitersLRU, err := lru.New(config.CacheSize)
 	if err != nil {
 		panic(err)
 	}
 	return &RateLimiter{
 		limitersCache: limitersLRU,
+		config:        config,
 	}
 }
 
@@ -45,7 +50,7 @@ func (rl *RateLimiter) GetLimiter(clientIP string) *rate.Limiter {
 	}
 
 	// Create a new limiter if none exists
-	limiter := rate.NewLimiter(1, 1)        // 1 request per second
+	limiter := rate.NewLimiter(rate.Limit(rl.config.RateLimit), rl.config.BurstLimit)
 	rl.limitersCache.Add(clientIP, limiter) // Add the new limiter to the cache
 	return limiter
 }
@@ -103,11 +108,11 @@ func (lrw *loggingResponseWriter) WriteHeader(code int) {
 
 // ServeProxy sets up and starts the reverse proxy server.
 // It forwards requests to the specified target and logs each request using the middleware.
-func ServeProxy(config Config) {
-	target := config.Target // Get the target URL from the config
-	proxyPort := config.ProxyPort
+func ServeProxy(config []Config) {
+	target := config[0].Target // Get the target URL from the config
+	proxyPort := config[0].ProxyPort
 
-	rateLimiter := NewRateLimiter(100) // Create a new rate limiter instance
+	rateLimiter := NewRateLimiter(config[0]) // Create a new rate limiter instance
 
 	// Parse the target URL
 	targetURL, err := url.Parse(target)
