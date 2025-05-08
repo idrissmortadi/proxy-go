@@ -10,17 +10,22 @@ import (
 	"sync"
 	"time"
 
+	lru "github.com/hashicorp/golang-lru"
 	"golang.org/x/time/rate"
 )
 
 type RateLimiter struct {
-	limiters map[string]*rate.Limiter
-	mu       sync.Mutex
+	limitersCache *lru.Cache
+	mu            sync.Mutex
 }
 
-func NewRateLimiter() *RateLimiter {
+func NewRateLimiter(cacheSize int) *RateLimiter {
+	limitersLRU, err := lru.New(cacheSize)
+	if err != nil {
+		panic(err)
+	}
 	return &RateLimiter{
-		limiters: make(map[string]*rate.Limiter),
+		limitersCache: limitersLRU,
 	}
 }
 
@@ -29,13 +34,14 @@ func (rl *RateLimiter) GetLimiter(clientIP string) *rate.Limiter {
 	defer rl.mu.Unlock()
 
 	// Check if a limiter exists for the client IP
-	if limiter, exists := rl.limiters[clientIP]; exists {
-		return limiter
+	if rl.limitersCache.Contains(clientIP) {
+		limiter, _ := rl.limitersCache.Get(clientIP)
+		return limiter.(*rate.Limiter)
 	}
 
 	// Create a new limiter if none exists
-	limiter := rate.NewLimiter(1, 1) // 1 request per second
-	rl.limiters[clientIP] = limiter
+	limiter := rate.NewLimiter(1, 1)        // 1 request per second
+	rl.limitersCache.Add(clientIP, limiter) // Add the new limiter to the cache
 	return limiter
 }
 
@@ -93,7 +99,7 @@ func (lrw *loggingResponseWriter) WriteHeader(code int) {
 // ServeProxy sets up and starts the reverse proxy server.
 // It forwards requests to the specified target and logs each request using the middleware.
 func ServeProxy(target string, port int) {
-	rateLimiter := NewRateLimiter() // Create a new rate limiter instance
+	rateLimiter := NewRateLimiter(100) // Create a new rate limiter instance
 
 	// Parse the target URL
 	targetURL, err := url.Parse(target)
