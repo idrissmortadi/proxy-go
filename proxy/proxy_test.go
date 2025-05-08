@@ -13,7 +13,7 @@ func TestLimitMiddleware(t *testing.T) {
 		w.Write([]byte("OK"))
 	})
 
-	rateLimiter := NewRateLimiter() // Create a new rate limiter instance
+	rateLimiter := NewRateLimiter(100)
 	handler := limitMiddleware(testHandler, rateLimiter)
 	server := httptest.NewServer(handler)
 	defer server.Close()
