@@ -1,2 +1,5 @@
 - target: http://localhost:3000
   proxy_port: 8080
+  rate_limit: 1
+  cache_size: 10
+  burst_limit: 3

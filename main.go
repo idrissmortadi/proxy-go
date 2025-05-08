@@ -15,7 +15,7 @@ func main() {
 	}
 	defer file.Close()
 
-	var config proxy.Config
+	var config []proxy.Config
 	decoder := yaml.NewDecoder(file)
 	if err := decoder.Decode(&config); err != nil {
 		log.Fatalf("Error decoding YAML: %v", err)
