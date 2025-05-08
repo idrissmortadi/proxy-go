@@ -55,7 +55,7 @@ func limitMiddleware(next http.Handler, rateLimiter *RateLimiter) http.Handler {
 		// Check if the request is allowed
 		if !limiter.Allow() {
 			w.WriteHeader(http.StatusTooManyRequests) // Respond with 429 Too Many Requests
-			w.Write([]byte("Too Many Requests"))      // Optional: Add a message body
+			w.Write([]byte("Too Many Requests\n"))    // Optional: Add a message body
 			return
 		}
 
