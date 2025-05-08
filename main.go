@@ -1,15 +1,25 @@
 package main
 
 import (
-	"flag"
+	"log"
+	"os"
 
 	"github.com/idrissmortadi/proxy-go/proxy"
+	"gopkg.in/yaml.v3"
 )
 
 func main() {
-	target := flag.String("target", "http://localhost:3000", "Target server URL")
-	port := flag.Int("port", 8080, "Proxy server port")
-	flag.Parse()
+	file, err := os.Open("config.yaml")
+	if err != nil {
+		panic(err)
+	}
+	defer file.Close()
 
-	proxy.ServeProxy(*target, *port)
+	var config proxy.Config
+	decoder := yaml.NewDecoder(file)
+	if err := decoder.Decode(&config); err != nil {
+		log.Fatalf("Error decoding YAML: %v", err)
+	}
+
+	proxy.ServeProxy(config)
 }
