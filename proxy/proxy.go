@@ -3,11 +3,60 @@ package proxy
 import (
 	"fmt"
 	"log"
+	"net"
 	"net/http"
 	"net/http/httputil"
 	"net/url"
+	"sync"
 	"time"
+
+	"golang.org/x/time/rate"
 )
+
+type RateLimiter struct {
+	limiters map[string]*rate.Limiter
+	mu       sync.Mutex
+}
+
+func NewRateLimiter() *RateLimiter {
+	return &RateLimiter{
+		limiters: make(map[string]*rate.Limiter),
+	}
+}
+
+func (rl *RateLimiter) GetLimiter(clientIP string) *rate.Limiter {
+	rl.mu.Lock()
+	defer rl.mu.Unlock()
+
+	// Check if a limiter exists for the client IP
+	if limiter, exists := rl.limiters[clientIP]; exists {
+		return limiter
+	}
+
+	// Create a new limiter if none exists
+	limiter := rate.NewLimiter(1, 1) // 1 request per second
+	rl.limiters[clientIP] = limiter
+	return limiter
+}
+
+func limitMiddleware(next http.Handler, rateLimiter *RateLimiter) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		clientIP, _, _ := net.SplitHostPort(r.RemoteAddr) // Extract client IP
+
+		// Get the rate limiter for the client IP
+		limiter := rateLimiter.GetLimiter(clientIP)
+
+		// Check if the request is allowed
+		if !limiter.Allow() {
+			w.WriteHeader(http.StatusTooManyRequests) // Respond with 429 Too Many Requests
+			w.Write([]byte("Too Many Requests"))      // Optional: Add a message body
+			return
+		}
+
+		// Pass the request to the next handler
+		next.ServeHTTP(w, r)
+	})
+}
 
 // logMiddleware is a middleware function that wraps an http.Handler.
 // It logs details about each request, including the client IP, HTTP method, URL, status code, and response time.
@@ -44,6 +93,8 @@ func (lrw *loggingResponseWriter) WriteHeader(code int) {
 // ServeProxy sets up and starts the reverse proxy server.
 // It forwards requests to the specified target and logs each request using the middleware.
 func ServeProxy(target string, port int) {
+	rateLimiter := NewRateLimiter() // Create a new rate limiter instance
+
 	// Parse the target URL
 	targetURL, err := url.Parse(target)
 	if err != nil {
@@ -54,7 +105,7 @@ func ServeProxy(target string, port int) {
 	proxy := httputil.NewSingleHostReverseProxy(targetURL)
 
 	// Wrap the proxy handler with the logging middleware
-	handler := logMiddleware(proxy)
+	handler := limitMiddleware(logMiddleware(proxy), rateLimiter)
 
 	// Register the handler for the root path
 	http.Handle("/", handler)
