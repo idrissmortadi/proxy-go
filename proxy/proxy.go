@@ -14,6 +14,11 @@ import (
 	"golang.org/x/time/rate"
 )
 
+type Config struct {
+	Target    string `yaml:"target"`
+	ProxyPort int    `yaml:"proxy_port"`
+}
+
 type RateLimiter struct {
 	limitersCache *lru.Cache
 	mu            sync.Mutex
@@ -98,7 +103,10 @@ func (lrw *loggingResponseWriter) WriteHeader(code int) {
 
 // ServeProxy sets up and starts the reverse proxy server.
 // It forwards requests to the specified target and logs each request using the middleware.
-func ServeProxy(target string, port int) {
+func ServeProxy(config Config) {
+	target := config.Target // Get the target URL from the config
+	proxyPort := config.ProxyPort
+
 	rateLimiter := NewRateLimiter(100) // Create a new rate limiter instance
 
 	// Parse the target URL
@@ -117,8 +125,8 @@ func ServeProxy(target string, port int) {
 	http.Handle("/", handler)
 
 	// Log the server startup details
-	log.Printf("Proxy server running on http://localhost:%d, forwarding to %s\n", port, target)
+	log.Printf("Proxy server running on http://localhost:%d, forwarding to %s\n", proxyPort, target)
 
 	// Start the HTTP server
-	log.Fatal(http.ListenAndServe(fmt.Sprintf(":%d", port), nil))
+	log.Fatal(http.ListenAndServe(fmt.Sprintf(":%d", proxyPort), nil))
 }
