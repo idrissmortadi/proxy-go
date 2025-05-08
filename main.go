@@ -1,6 +1,7 @@
 package main
 
 import (
+	"flag"
 	"log"
 	"os"
 
@@ -9,7 +10,10 @@ import (
 )
 
 func main() {
-	file, err := os.Open("config.yaml")
+	configPath := flag.String("config", "config.yaml", "Path to the YAML configuration file")
+	flag.Parse()
+
+	file, err := os.Open(*configPath)
 	if err != nil {
 		panic(err)
 	}
